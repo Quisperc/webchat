@@ -12,13 +12,13 @@
 			background: #f5f5f5;
 		}
 
-		#container {
+		#app-wrapper {
 			display: flex;
 			height: 100vh;
 		}
 
-		/* 新增这条规则来专门处理 #container 的隐藏 */
-		#container.hidden {
+		/* 新增这条规则来专门处理 #app-wrapper 的隐藏 */
+		#app-wrapper.hidden {
     		display: none;
 		}
 
@@ -156,6 +156,7 @@
 			font-style: italic;
 		}
 	</style>
+	<link rel="stylesheet" href="css/style.css">
 </head>
 
 <body>
@@ -167,7 +168,7 @@
 		<button onclick="registerUser()">注册</button>
 		<div id="login-error" style="color:red;margin-top:8px;"></div>
 	</div>
-	<div id="container" class="hidden">
+	<div id="app-wrapper" class="hidden">
 		<div id="sidebar">
 			<div id="user-info">
 				<div>账号：<span id="my-username"></span></div>
@@ -210,8 +211,11 @@
 		let isAdmin = false;
 
 		function showMain() {
+
+			document.body.classList.add('logged-in'); // <-- ADD THIS LINE
+
 			document.getElementById('login-register').classList.add('hidden');
-			document.getElementById('container').classList.remove('hidden');
+			document.getElementById('app-wrapper').classList.remove('hidden');
 		}
 
 		function showLoginError(msg) {
@@ -274,6 +278,9 @@
 				stompClient.subscribe('/user/queue/private', onMessageReceived);
 				// 关键：WebSocket连接建立后再刷新自己的在线信息
 				setTimeout(getSessionIdAndLoginTime, 300); // 延迟一点，确保后端已记录
+
+				// ADD THIS LINE to highlight the default channel
+				document.querySelector("input[value='public']").closest('label').classList.add('active-channel');
 			});
 		}
 
@@ -305,6 +312,21 @@
 		}
 
 		function selectChannel(channel) {
+
+
+			// --- START: NEW CODE for active channel highlighting ---
+			// Remove active class from any previously selected channel
+			const currentActive = document.querySelector('#channels .active-channel');
+			if (currentActive) {
+				currentActive.classList.remove('active-channel');
+			}
+			// Add active class to the new selected channel's label
+			const newActive = document.querySelector(`input[name='channel'][value='${channel}']`);
+			if (newActive) {
+				newActive.closest('label').classList.add('active-channel');
+			}
+			// --- END: NEW CODE ---
+
 			currentChannel = channel;
 			document.getElementById('chat-title').innerText = channel === 'public' ? '公共频道' : '与 ' + channel + ' 私聊';
 			loadHistory(channel);
