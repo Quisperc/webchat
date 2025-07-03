@@ -431,7 +431,9 @@
 			if (msg.type === 'JOIN' || msg.type === 'LEAVE') cls = 'msg-system';
 			div.className = cls;
 			let time = msg.timestamp ? ('<span style="color:#aaa;font-size:12px;">[' + msg.timestamp.replace('T', ' ').slice(0, 19) + ']</span> ') : '';
-			let sender = msg.sender ? ('<b>' + msg.sender + '</b>: ') : '';
+			// let sender = msg.sender ? ('<b>' + msg.sender + '</b>: ') : '';
+			// 新旧代码的差异，采用新UI后，发送者名字后面不显示冒号
+			let sender = msg.sender ? ('<b>' + msg.sender + '</b> ') : '';
 			let content = msg.content;
 			if (msg.type === 'MUTE') content = '<span style="color:#f0ad4e;">' + content + '</span>';
 			if (msg.type === 'KICK') content = '<span style="color:#d9534f;">' + content + '</span>';
