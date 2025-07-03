@@ -30,6 +30,9 @@ public class UserController {
 
     // 用户上线时调用
     public static void userOnline(String username, String loginTime, String sessionId, String role) {
+        // if (onlineUserMap.containsKey(username)) {
+        //     onlineUserMap.remove(username);
+        // }
         Map<String, Object> info = new HashMap<>();
         info.put("username", username);
         info.put("loginTime", loginTime);
