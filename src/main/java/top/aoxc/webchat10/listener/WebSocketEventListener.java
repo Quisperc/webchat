@@ -1,5 +1,6 @@
 package top.aoxc.webchat10.listener;
 
+import org.hibernate.Session;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -11,7 +12,9 @@ import org.springframework.web.socket.messaging.SessionConnectedEvent;
 import org.springframework.web.socket.messaging.SessionDisconnectEvent;
 import top.aoxc.webchat10.model.ChatMessage;
 import top.aoxc.webchat10.controller.UserController;
+import top.aoxc.webchat10.repository.ChatMessageRepository;
 
+import java.time.LocalDateTime;
 import java.util.Objects;
 
 @Component
@@ -21,6 +24,9 @@ public class WebSocketEventListener {
 
     @Autowired
     private SimpMessageSendingOperations messagingTemplate;
+
+    @Autowired
+    private ChatMessageRepository chatMessageRepository;
 
     @EventListener
     public void handleWebSocketConnectListener(SessionConnectedEvent event) {
@@ -43,6 +49,13 @@ public class WebSocketEventListener {
             messagingTemplate.convertAndSend("/topic/public", chatMessage);
             // 移除在线用户
             UserController.userOffline(username);
+            // 保存LEAVE消息
+            chatMessage.setTimestamp(LocalDateTime.now());
+            chatMessage.setReceiver("public");
+            chatMessage.setType(ChatMessage.MessageType.LEAVE);
+            chatMessageRepository.save(chatMessage);
+            // 发送到公共频道
+            messagingTemplate.convertAndSend("/topic/public", chatMessage);
         }
     }
 }

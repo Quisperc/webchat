@@ -312,10 +312,9 @@
 		}
 
 		function selectChannel(channel) {
-
-
+			
 			// --- START: NEW CODE for active channel highlighting ---
-			// Remove active class from any previously selected channel
+			// 选择频道时以及切换频道时，移除当前选中的频道
 			const currentActive = document.querySelector('#channels .active-channel');
 			if (currentActive) {
 				currentActive.classList.remove('active-channel');
@@ -422,24 +421,67 @@
 			}
 		}
 
+		// function appendMessage(msg) {
+		// 	const chat = document.getElementById('chat-messages');
+		// 	const div = document.createElement('div');
+		// 	let cls = '';
+		// 	if (msg.sender === currentUser.username) cls = 'msg-me';
+		// 	if (msg.sender === 'ADMIN') cls = 'msg-admin';
+		// 	if (msg.type === 'JOIN' || msg.type === 'LEAVE') cls = 'msg-system';
+		// 	div.className = cls;
+		// 	let time = msg.timestamp ? ('<span style="color:#aaa;font-size:12px;">[' + msg.timestamp.replace('T', ' ').slice(0, 19) + ']</span> ') : '';
+		// 	// let sender = msg.sender ? ('<b>' + msg.sender + '</b>: ') : '';
+		// 	// 新旧代码的差异，采用新UI后，发送者名字后面不显示冒号
+		// 	let sender = msg.sender ? ('<b>' + msg.sender + '</b> ') : '';
+		// 	let content = msg.content;
+		// 	if (msg.type === 'MUTE') content = '<span style="color:#f0ad4e;">' + content + '</span>';
+		// 	if (msg.type === 'KICK') content = '<span style="color:#d9534f;">' + content + '</span>';
+		// 	if (msg.type === 'JOIN') content = '<span style="color:#5cb85c;">' + (msg.sender || '') + ' 加入了频道</span>';
+		// 	if (msg.type === 'LEAVE') content = '<span style="color:#aaa;">' + (msg.sender || '') + ' 离开了频道</span>';
+		// 	div.innerHTML = time + sender + content;
+		// 	chat.appendChild(div);
+		// 	chat.scrollTop = chat.scrollHeight;
+		// }
+
+		// 新版本 appendMessage 函数
 		function appendMessage(msg) {
 			const chat = document.getElementById('chat-messages');
 			const div = document.createElement('div');
-			let cls = '';
-			if (msg.sender === currentUser.username) cls = 'msg-me';
-			if (msg.sender === 'ADMIN') cls = 'msg-admin';
-			if (msg.type === 'JOIN' || msg.type === 'LEAVE') cls = 'msg-system';
-			div.className = cls;
+
 			let time = msg.timestamp ? ('<span style="color:#aaa;font-size:12px;">[' + msg.timestamp.replace('T', ' ').slice(0, 19) + ']</span> ') : '';
-			// let sender = msg.sender ? ('<b>' + msg.sender + '</b>: ') : '';
-			// 新旧代码的差异，采用新UI后，发送者名字后面不显示冒号
-			let sender = msg.sender ? ('<b>' + msg.sender + '</b> ') : '';
+			let sender = msg.sender ? ('<b>' + msg.sender + '</b>: ') : '';
 			let content = msg.content;
-			if (msg.type === 'MUTE') content = '<span style="color:#f0ad4e;">' + content + '</span>';
-			if (msg.type === 'KICK') content = '<span style="color:#d9534f;">' + content + '</span>';
-			if (msg.type === 'JOIN') content = '<span style="color:#5cb85c;">' + (msg.sender || '') + ' 加入了频道</span>';
-			if (msg.type === 'LEAVE') content = '<span style="color:#aaa;">' + (msg.sender || '') + ' 离开了频道</span>';
-			div.innerHTML = time + sender + content;
+			let cls = '';
+
+			// 根据消息类型设置样式和内容
+			if (msg.type === 'JOIN' || msg.type === 'LEAVE' || msg.type === 'KICK' || msg.type === 'MUTE') {
+				cls = 'msg-system'; // 所有系统类消息都用这个基础样式
+
+				// 特殊处理内容，不再需要 sender 部分
+				if (msg.type === 'JOIN') {
+					div.innerHTML = `<span style="color:#5cb85c;"><b>${msg.sender || ''}</b> 加入了频道</span>`;
+				} else if (msg.type === 'LEAVE') {
+					div.innerHTML = `<span style="color:#aaa;"><b>${msg.sender || ''}</b> 离开了频道</span>`;
+				} else if (msg.type === 'MUTE') {
+					// 将 MUTE 消息也格式化为系统消息
+					div.innerHTML = `<span style="color:var(--warning-color);"><b>${msg.sender}</b> ${content}</span>`;
+				} else if (msg.type === 'KICK') {
+					// 将 KICK 消息也格式化为系统消息
+					div.innerHTML = `<span style="color:var(--danger-color);"><b>${msg.sender}</b> ${content}</span>`;
+				}
+
+			} else { // 普通聊天消息
+				if (msg.sender === currentUser.username) {
+					cls = 'msg-me';
+				} else if (msg.sender === 'ADMIN') {
+					cls = 'msg-admin'; // 如果你还想让ADMIN消息有特殊样式
+				}
+
+				// 普通消息的结构
+				div.innerHTML = time + sender + content;
+			}
+
+			div.className = cls;
 			chat.appendChild(div);
 			chat.scrollTop = chat.scrollHeight;
 		}

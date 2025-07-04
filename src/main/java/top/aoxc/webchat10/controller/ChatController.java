@@ -73,6 +73,13 @@ public class ChatController {
         if (user != null) {
             UserController.userOnline(user.getUsername(), LocalDateTime.now().toString(), headerAccessor.getSessionId(), user.getRole());
         }
+        // 保存JOIN消息
+        chatMessage.setTimestamp(LocalDateTime.now());
+        chatMessage.setReceiver("public");
+        chatMessage.setType(ChatMessage.MessageType.JOIN);
+        chatMessageRepository.save(chatMessage);
+        // 发送到公共频道
+        messagingTemplate.convertAndSend("/topic/public", chatMessage);
     }
 
     @MessageMapping("/admin.kick")
@@ -91,6 +98,7 @@ public class ChatController {
             kickMessage.setReceiver(userToKick);
             kickMessage.setContent("You have been kicked by an administrator.");
             kickMessage.setTimestamp(LocalDateTime.now());
+            chatMessageRepository.save(kickMessage);
 
             // 发送踢出通知给被踢用户
             messagingTemplate.convertAndSendToUser(userToKick, "/queue/private", kickMessage);
@@ -119,6 +127,7 @@ public class ChatController {
                 mutedUsers.add(userToMute);
                 muteMsg.setContent("你已被管理员禁言");
             }
+            chatMessageRepository.save(muteMsg);
             // messagingTemplate.convertAndSendToUser(userToMute, "/queue/private", muteMsg);
             // 只推送一次到公共频道，内容区分
             messagingTemplate.convertAndSend("/topic/public", muteMsg);
