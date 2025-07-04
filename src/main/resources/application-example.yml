@@ -1,0 +1,22 @@
+# 服务器配置
+server:
+  port: 8080 # 服务运行端口
+
+# MySQL 数据源配置
+spring:
+  datasource:
+    # localhost为数据库服务器，本地为localhost，远程则填写远程数据库服务器地址，webchat为数据库名
+    url: jdbc:mysql://localhost:3306/webchat?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
+    username: root # 用户名
+    password: password # 密码
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  jpa:
+    hibernate:
+      ddl-auto: update #自动生成表
+    show-sql: true # 展示数据库查询过程中的sql语句
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQL8Dialect
+  jackson:
+    serialization:
+      fail-on-empty-beans: false
