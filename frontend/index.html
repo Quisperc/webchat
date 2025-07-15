@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>WebSocket 聊天系统</title>
+    <link rel="stylesheet" href="css/style.css">
+    <style>
+        /* 兼容性样式，可根据需要调整 */
+        body { background: #f5f5f5; }
+    </style>
+</head>
+<body>
+    <div id="login-register">
+        <h2>登录 / 注册</h2>
+        <input type="text" id="login-username" placeholder="账号" autocomplete="username">
+        <input type="password" id="login-password" placeholder="密码" autocomplete="current-password">
+        <button onclick="login()">登录</button>
+        <button onclick="registerUser()">注册</button>
+        <div id="login-error" style="color:red;margin-top:8px;"></div>
+    </div>
+    <div id="app-wrapper" class="hidden">
+        <div id="sidebar">
+            <div id="user-info">
+                <div>账号：<span id="my-username"></span></div>
+                <div>登录时间：<span id="my-login-time"></span></div>
+                <div>SessionID：<span id="my-session-id"></span></div>
+                <div>角色：<span id="my-role"></span></div>
+            </div>
+            <div id="channels">
+                <strong>频道</strong>
+                <div>
+                    <label><input type="radio" name="channel" value="public" checked onchange="selectChannel('public')"> 公共频道</label>
+                </div>
+                <div id="private-channels"></div>
+            </div>
+            <div id="online-users">
+                <strong>在线用户</strong>
+                <ul id="online-users-list"></ul>
+            </div>
+        </div>
+        <div id="main">
+            <div id="chat-header">
+                <span id="chat-title">公共频道</span>
+            </div>
+            <div id="chat-messages"></div>
+            <div id="chat-input">
+                <input type="text" id="message-input" placeholder="输入消息..." onkeydown="if(event.key==='Enter'){sendMessage();}">
+                <button onclick="sendMessage()">发送</button>
+            </div>
+        </div>
+    </div>
+    <script>
+        let currentUser = null;
+        let sessionId = '';
+        let loginTime = '';
+        let currentChannel = 'public';
+        let stompClient = null;
+        let onlineUsers = [];
+        let isAdmin = false;
+        const API_BASE = 'http://localhost:8080';
+        const WS_BASE = 'http://localhost:8080/ws';
+
+        function showMain() {
+            document.body.classList.add('logged-in');
+            document.getElementById('login-register').classList.add('hidden');
+            document.getElementById('app-wrapper').classList.remove('hidden');
+        }
+        function showLoginError(msg) {
+            document.getElementById('login-error').innerText = msg;
+        }
+        function login() {
+            const username = document.getElementById('login-username').value.trim();
+            const password = document.getElementById('login-password').value;
+            fetch(API_BASE + '/api/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, password })
+            }).then(r => {
+                if (r.ok) return r.json();
+                return r.text().then(msg => { throw new Error(msg); });
+            }).then(user => {
+                currentUser = user;
+                isAdmin = user.role === 'ADMIN';
+                showMain();
+                connectWebSocket();
+                loadOnlineUsers();
+                loadHistory('public');
+            }).catch(e => showLoginError(e.message));
+        }
+        function registerUser() {
+            const username = document.getElementById('login-username').value.trim();
+            const password = document.getElementById('login-password').value;
+            fetch(API_BASE + '/api/register', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, password, role: 'USER' })
+            }).then(r => {
+                if (r.ok) {
+                    showLoginError('注册成功，请登录');
+                } else {
+                    r.text().then(msg => showLoginError(msg));
+                }
+            });
+        }
+        function getSessionIdAndLoginTime() {
+            fetch(API_BASE + '/api/user/me').then(r => r.json()).then(user => {
+                document.getElementById('my-username').innerText = user.username;
+                document.getElementById('my-role').innerText = user.role;
+                loadOnlineUsers(true);
+            });
+        }
+        function connectWebSocket() {
+            const socket = new SockJS(WS_BASE + '?username=' + encodeURIComponent(currentUser.username));
+            stompClient = Stomp.over(socket);
+            stompClient.connect({}, function (frame) {
+                stompClient.send('/app/chat.addUser', {}, JSON.stringify({ sender: currentUser.username, type: 'JOIN' }));
+                stompClient.subscribe('/topic/public', onMessageReceived);
+                stompClient.subscribe('/user/queue/private', onMessageReceived);
+                setTimeout(getSessionIdAndLoginTime, 300);
+                document.querySelector("input[value='public']").closest('label').classList.add('active-channel');
+            });
+        }
+        function loadOnlineUsers(updateSelfInfo) {
+            fetch(API_BASE + '/api/online-users').then(r => r.json()).then(users => {
+                onlineUsers = users;
+                const list = document.getElementById('online-users-list');
+                list.innerHTML = '';
+                let privateChannels = '';
+                users.forEach(u => {
+                    const li = document.createElement('li');
+                    li.innerHTML = `<span>${u.username}</span><span style="font-size:12px;color:#888;">${u.loginTime}<br>SID:${u.sessionId}</span>`;
+                    if (isAdmin && u.username !== currentUser.username) {
+                        li.innerHTML += `<button class='admin-btn mute' onclick="muteUser('${u.username}')">禁言</button>`;
+                        li.innerHTML += `<button class='admin-btn kick' onclick="kickUser('${u.username}')">踢出</button>`;
+                    }
+                    list.appendChild(li);
+                    if (u.username !== currentUser.username) {
+                        privateChannels += `<div><label><input type='radio' name='channel' value='${u.username}' onchange="selectChannel('${u.username}')"> ${u.username}</label></div>`;
+                    }
+                    if (updateSelfInfo && u.username === currentUser.username) {
+                        document.getElementById('my-login-time').innerText = u.loginTime;
+                        document.getElementById('my-session-id').innerText = u.sessionId;
+                    }
+                });
+                document.getElementById('private-channels').innerHTML = privateChannels;
+            });
+        }
+        function selectChannel(channel) {
+            const currentActive = document.querySelector('#channels .active-channel');
+            if (currentActive) {
+                currentActive.classList.remove('active-channel');
+            }
+            const newActive = document.querySelector(`input[name='channel'][value='${channel}']`);
+            if (newActive) {
+                newActive.closest('label').classList.add('active-channel');
+            }
+            currentChannel = channel;
+            document.getElementById('chat-title').innerText = channel === 'public' ? '公共频道' : '与 ' + channel + ' 私聊';
+            loadHistory(channel);
+            document.getElementById('message-input').focus();
+        }
+        function loadHistory(channel) {
+            fetch(API_BASE + '/api/history/' + channel + '?currentUser=' + encodeURIComponent(currentUser.username))
+                .then(r => r.json())
+                .then(msgs => {
+                    const chat = document.getElementById('chat-messages');
+                    chat.innerHTML = '';
+                    msgs.filter(m => {
+                        if (channel === 'public') return true;
+                        return (
+                            (m.sender === currentUser.username && m.receiver === channel) ||
+                            (m.sender === channel && m.receiver === currentUser.username)
+                        );
+                    }).forEach(m => appendMessage(m));
+                    chat.scrollTop = chat.scrollHeight;
+                });
+        }
+        function sendMessage() {
+            const input = document.getElementById('message-input');
+            const content = input.value.trim();
+            if (!content) return;
+            const msg = {
+                sender: currentUser.username,
+                receiver: currentChannel,
+                content: content,
+                type: 'CHAT'
+            };
+            stompClient.send('/app/chat.sendMessage', {}, JSON.stringify(msg));
+            input.value = '';
+        }
+        function onMessageReceived(payload) {
+            const msg = JSON.parse(payload.body);
+            if (msg.receiver === 'public' && currentChannel === 'public') {
+                appendMessage(msg);
+            } else if (msg.receiver === 'public') {
+                window._pendingMessages = window._pendingMessages || {};
+                window._pendingMessages['public'] = window._pendingMessages['public'] || [];
+                window._pendingMessages['public'].push(msg);
+            }
+            if (
+                msg.receiver !== 'public' &&
+                (msg.sender === currentUser.username || msg.receiver === currentUser.username)
+            ) {
+                if (
+                    currentChannel !== 'public' &&
+                    ((msg.sender === currentUser.username && msg.receiver === currentChannel) ||
+                        (msg.sender === currentChannel && msg.receiver === currentUser.username))
+                ) {
+                    appendMessage(msg);
+                } else {
+                    const other = msg.sender === currentUser.username ? msg.receiver : msg.sender;
+                    window._pendingMessages = window._pendingMessages || {};
+                    window._pendingMessages[other] = window._pendingMessages[other] || [];
+                    window._pendingMessages[other].push(msg);
+                }
+            }
+            if (msg.type === 'KICK' && msg.receiver === currentUser.username) {
+                alert('你已被管理员踢出！');
+                window.location.reload();
+            }
+            if (msg.type === 'MUTE' && msg.receiver === currentUser.username) {
+                if (msg.content && msg.content.indexOf('解除禁言') !== -1) {
+                    alert('你已被管理员解除禁言！');
+                } else if (msg.content && msg.content.indexOf('禁言') !== -1) {
+                    alert('你已被管理员禁言！');
+                }
+            }
+            if (msg.type === 'JOIN' || msg.type === 'LEAVE' || msg.type === 'KICK') {
+                setTimeout(() => loadOnlineUsers(), 500);
+            }
+        }
+        function appendMessage(msg) {
+            const chat = document.getElementById('chat-messages');
+            const div = document.createElement('div');
+            let time = msg.timestamp ? ('<span style="color:#aaa;font-size:12px;">[' + msg.timestamp.replace('T', ' ').slice(0, 19) + ']</span> ') : '';
+            let sender = msg.sender ? ('<b>' + msg.sender + '</b>: ') : '';
+            let content = msg.content;
+            let cls = '';
+            if (msg.type === 'JOIN' || msg.type === 'LEAVE' || msg.type === 'KICK' || msg.type === 'MUTE') {
+                cls = 'msg-system';
+                if (msg.type === 'JOIN') {
+                    div.innerHTML = `<span style="color:#5cb85c;"><b>${msg.sender || ''}</b> 加入了频道</span>`;
+                } else if (msg.type === 'LEAVE') {
+                    div.innerHTML = `<span style="color:#aaa;"><b>${msg.sender || ''}</b> 离开了频道</span>`;
+                } else if (msg.type === 'MUTE') {
+                    div.innerHTML = `<span style="color:var(--warning-color);"><b>${msg.sender}</b> ${content}</span>`;
+                } else if (msg.type === 'KICK') {
+                    div.innerHTML = `<span style="color:var(--danger-color);"><b>${msg.sender}</b> ${content}</span>`;
+                }
+            } else {
+                if (msg.sender === currentUser.username) {
+                    cls = 'msg-me';
+                } else if (msg.sender === 'ADMIN') {
+                    cls = 'msg-admin';
+                }
+                div.innerHTML = time + sender + content;
+            }
+            div.className = cls;
+            chat.appendChild(div);
+            chat.scrollTop = chat.scrollHeight;
+        }
+        function muteUser(username) {
+            if (!isAdmin) return;
+            const msg = { sender: username, type: 'MUTE' };
+            stompClient.send('/app/admin.mute', {}, JSON.stringify(msg));
+        }
+        function kickUser(username) {
+            if (!isAdmin) return;
+            const msg = { sender: username, type: 'KICK' };
+            stompClient.send('/app/admin.kick', {}, JSON.stringify(msg));
+        }
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/sockjs-client@1/dist/sockjs.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/stompjs@2.3.3/lib/stomp.min.js"></script>
+</body>
+</html> 
