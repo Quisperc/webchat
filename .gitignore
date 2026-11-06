@@ -31,3 +31,6 @@ build/
 
 ### VS Code ###
 .vscode/
+# 真实环境配置（含密钥，不入库）
+src/main/resources/application.yml
+!src/main/resources/examples/

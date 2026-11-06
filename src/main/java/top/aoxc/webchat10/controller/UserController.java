@@ -25,7 +25,7 @@ public class UserController {
     @Autowired
     private ChatMessageRepository chatMessageRepository;
 
-    // 在线用户信息存储（简单实现，生产环境建议用分布式缓存等）
+    // 在线用户信息存储
     private static final Map<String, Map<String, Object>> onlineUserMap = new HashMap<>();
 
     // 用户上线时调用
@@ -51,7 +51,7 @@ public class UserController {
         if (userRepository.findByUsername(user.getUsername()).isPresent()) {
             return ResponseEntity.status(HttpStatus.CONFLICT).body("Username is already taken!");
         }
-        // 简单处理，实际项目中密码需要加密
+        // 简单处理
         userRepository.save(user);
         return ResponseEntity.ok("User registered successfully!");
     }
